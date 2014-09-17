@@ -1,0 +1,57 @@
+span span {
+display:inline-block;
+width:130px;
+}
+
+div.sp_share {
+font-size:16px;
+padding-left:10px;
+padding-top:15px;
+padding-bottom:5px;
+height:12px;
+background-color:black;
+margin-bottom:15px;
+}
+
+p.sp_share {
+font-size:14px;
+background-color:black;
+color:white;
+}
+
+
+
+.sp_info_break2 {
+background-color:gray;
+				}
+
+.sp_info_break {
+padding-top:40px;
+padding-bottom:0px;
+margin-bottom:-15px;
+				}
+
+div.sp_data {
+margin-left:10px;
+padding-left:15px;
+}	
+
+span img {
+width:175px;
+height:200px;
+}
+
+
+span.sp_video {
+display:inline-block;
+width:130px;
+	
+	
+}
+
+div.sp_video2 {
+display:inline-block;
+width:130px;
+	
+	
+}

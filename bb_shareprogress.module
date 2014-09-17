@@ -1,0 +1,1297 @@
+<?php
+// $Id$
+/**
+* @file
+* A module for integrating Share Progress RESTful API with the acme_inc website
+*/
+
+
+
+/**
+* Implement hook_help().
+*/
+
+function bb_shareprogress_help($path, $arg) {
+  if ($path == 'admin/help#bb_shareprogress'){
+    return t('BB Share Progress allows registered users and editors to interact with the Share Progress API.  You can make changes for AB titles and more.');
+  }
+}
+
+/**
+* Implement hook_menu().
+*/
+function bb_shareprogress_menu() {
+  $items = array();
+  $items['admin/config/content/bb_shareprogress'] = 
+  array(
+  'title' => 'Share Progress',
+  'description' => 'Configuration for Share Progress AB testing',
+  'page callback' => 'drupal_get_form',
+  'page arguments' => array('bb_shareprogress_form'),
+  'access arguments' => array('administer users'),
+  'type' => MENU_NORMAL_ITEM,
+  );
+
+
+  $items['node/%node/bb_shar_facebook'] = 
+  array(
+  'title' => 'Testing',
+  'description' => 'Test Configurations for Share Progress AB testing of this content',
+  'page callback' => 'drupal_get_form',
+  'page arguments' => array('bb_shareprogress_testform_form'),
+  'access arguments' => array('administer users'),
+  'type' => MENU_LOCAL_TASK,
+  );
+
+
+
+  $items['node/%node/bb_share_twitter'] = 
+  array(
+  'title' => 'Social AB Testing',
+  'description' => 'Configurations for Share Progress AB testing of this content',
+  'page callback' => 'drupal_get_form',
+  'page arguments' => array('bb_shareprogress_tw_form'),
+  'access arguments' => array('administer users'),
+  'type' => MENU_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+
+
+
+
+
+
+/**
+* Share Progress; create the admin form for share progress config.
+*/
+// This code deals with the CRUD functions for the Facebook button
+
+function bb_shareprogress_testform_form($form, &$form_state) {
+
+  watchdog('sp_test' , 'call to form function');
+
+  $form['sp_image2'] = array(
+  '#type' => 'managed_file',
+  '#name' => 'image',
+  '#title' => t('UPLOAD IMAGE'),
+  '#size' => 40,
+  '#upload_validators' => array(
+  'file_validate_extensions' => array('gif png jpg jpeg'),
+  'file_validate_size' => array(0.3*1024*1024),
+  ),
+  '#upload_location' => 'public://sp_images3/',
+  '#required' => FALSE,
+  '#ajax' => array(
+  'callback' => 'bb_shareprogress_thumb2',
+  'wrapper' => 'ajax_markup_div',
+  'method' =>'replace',
+  'effect' => 'fade',
+  ),   
+  );
+
+
+  if (!empty($form_state['values']['sp_image2'])) {
+    $form_state['rebuild'] = TRUE;
+    $form['ajax_marku2p'] = array(
+    '#prefix' => '<div id="ajax_markup_div">',
+    '#suffix' => '</div>',
+    '#markup' => t('Yes we have image has been updated yet'),
+    );
+  }
+
+  else {
+    $form['ajax_markup'] = array(
+    '#prefix' => '<div id="ajax_markup_div">',
+    '#suffix' => '</div>',
+    '#markup' => t('No image has been updated yet'),
+    );
+  }
+
+
+  $form['submit'] = array(
+  '#type' => 'submit',
+  '#value' => t('UPDATE TWITTER BUTTON'),
+  );
+
+  return $form;
+}
+
+
+
+
+/**
+* Share Progress TWITTER Form Function
+*/
+
+function bb_shareprogress_tw_form($form, &$form_state) {
+
+  $uploaded_pic = 'hey guys';
+
+  if (isset($form_state['values']['sp_image2']['#file'])) {
+    $file = file_load($form_state['values']['sp_image2']);
+    $image = image_load($file->uri);
+    debug($image->source);
+    $uploaded_pic = 'more again';
+  }
+
+  $sp_max = 0;
+  $sp_addnow = NULL;
+
+  if (isset($form_state['values']['sp_addone'])) {
+    $sp_max = $form_state['values']['sp_addone'];
+    $sp_addnow = 1;
+  }
+
+  $button_url = (!empty($_SERVER['HTTPS'])) ? "https://".$_SERVER['SERVER_NAME'].$_SERVER['REQUEST_URI'] : "http://".$_SERVER['SERVER_NAME'].$_SERVER['REQUEST_URI'];
+
+  $sp_tw_0 = NULL;	$sp_tw_b = NULL;	$sp_tw_c = NULL;	$sp_tw_d = NULL;
+  $sp_twitter_message_0 = NULL;	$sp_twitter_message_1 = NULL;	$sp_twitter_message_2 = NULL;	$sp_twitter_message_3 = NULL;
+  $sp_this = menu_get_object();
+  if ( isset($sp_this->field_sp_twitter_id['und'][0]['value'])) {
+    // if there is a share progress button pull in the share progress button data
+    $sp_id = $sp_this->field_sp_twitter_id['und'][0]['value'];
+    $mycall = drupal_http_request('https://run.shareprogress.org/api/v1/buttons/read?id='.$sp_id.'&key=3YKfg0H0Xwl93MkEinVU6g');
+    $data = json_decode($mycall->data);		
+    // decode JSON from shareprogress API call
+    $sp_page_title = $data->response[0]->page_title;
+    $sp_button_url = $data->response[0]->page_url;
+
+    $i = 0;
+    while (isset($data->response[0]->variants->twitter[$i]->id)) {
+      if ( isset($data->response[0]->variants->twitter[$i]->id)) {
+        ${'sp_tw_' . $i} = $data->response[0]->variants->twitter[$i]->id;
+        ${'sp_twitter_message_' . $i} = $data->response[0]->variants->twitter[$i]->twitter_message;	
+      }
+
+      $i++;
+    }
+
+    $sp_allv = $i;
+    watchdog('sp_tw' , 'how many versions $sp_allv = '. $sp_allv);	
+
+    $node = node_load($sp_this->nid);
+    $node->nid = $sp_this->nid;
+    $node->status = 1;														
+    // make the node published
+    $node->language = LANGUAGE_NONE;
+    node_save($node);
+    $sp_status = 'updated';
+  }
+
+
+  // if there is no share progress button create one from the node fields
+  else {
+    // error on upload
+    if (isset($sp_this->field_full_details))
+      $sp_trimmed = substr($sp_this->field_full_details['und'][0]['value'], 0, 100).' {LINK}';
+    else
+      $sp_trimmed = '';
+
+    $sp_page_title = (isset($sp_this->title)) ? substr($sp_this->title, 0, 20) : NULL;
+    $sp_button_url = substr($button_url, 0, -17);
+    $sp_twitter_message_0 = (isset($sp_this->title)) ? substr($sp_this->title, 0, 20) : NULL;
+    $sp_id = NULL;
+    $sp_status = 'created';
+  }
+
+  watchdog('sp_tw' , 'create twitter form');
+  $form['twi_markingup'] = array(
+  '#prefix' => '<div class="sp_info">',
+  '#suffix' => '</div>',
+  '#markup' => "<h2>SHAREPROGRESS TWITTER BUTTON </h2>"
+  );
+  $form['sp_nid'] = array('#type' => 'hidden', '#value' => (isset($sp_this->nid)) ? $sp_this->nid : NULL);
+  $form['sp_addone'] = array('#type' => 'hidden', '#value' => $sp_max);
+
+  // add twitter variant
+  if ($sp_id !== NULL) {
+    $form['addbutv0'] = array(
+    '#type' => 'button', 
+    '#name' =>'button_sp', 
+    '#value' => t('ADD TWITTER VARIANT'),
+    '#executes_submit_callback' => TRUE,
+    '#submit' => array('bb_shareprogress_tw_form_process')); 
+  }
+
+
+  $form['addsome'] = array(
+  '#type' => 'hidden',
+  '#value' => 13,
+  );
+
+  // Submit button
+  if ($sp_status == 'updated') {
+    $form['submit'] = array(
+    '#type' => 'button',
+    '#value' => t('UPDATE TWITTER BUTTON'),
+    '#executes_submit_callback' => TRUE,
+    '#submit' => array('bb_shareprogress_tw_form_process')
+    );
+  }    
+ 
+
+ if ($sp_status == 'created') {
+  $form['submit3'] = array(
+  '#type' => 'button',
+  '#value' => t('CREATE TWITTER BUTTON'), 
+  '#executes_submit_callback' => TRUE,
+  '#submit' => array('bb_shareprogress_tw_form_process')); 
+ }
+
+  $form['sp_status'] = array(
+  '#type' => 'hidden',
+  '#title' => t('Create or Update'),
+  '#description' => t('Simply giving the status of the process the form completes'),
+  '#size' => 60,
+  '#maxlength' => 120,
+  '#required' => FALSE,
+  '#default_value' =>$sp_status,
+  );
+
+  $form['sp_name'] = array(
+  '#type' => 'hidden',
+  '#title' => t('Button Title'),
+  '#description' => t('Name of this button'),
+  '#size' => 60,
+  '#maxlength' => 100,
+  '#required' => TRUE,
+  '#default_value' =>$sp_page_title,
+  );
+
+
+  $form['sp_url'] = array(
+  '#type' => 'textfield',
+  '#title' => t('Button URL'),
+  '#description' => t('URL of page to be shared by this button'),
+  '#size' => 60,
+  '#maxlength' => 255,
+  '#required' => TRUE,
+  '#default_value' =>$sp_button_url,
+  );
+
+  $form['sp_id'] = array(
+  '#type' => 'hidden',
+  '#title' => t('Button ID'),
+  '#description' => t('This is the Share Progess buttonID'),
+  '#size' => 60,
+  '#maxlength' => 120,
+  '#required' => FALSE,
+  '#default_value' =>$sp_id,
+  );
+
+
+
+  // CREATE A CONDITIONAL LOOP FOR AVAILABLE VARIANTS + ONE ?
+  $i=0;
+  $imore = 1;
+  while (isset($data->response[0]->variants->twitter[$i]->id)) {
+    $form['markingup'.$i] = array(
+    '#prefix' => '<div class="sp_info_break">',
+    '#suffix' => '</div>',
+    '#markup' => '<h2>TWITTER VERSION '.$imore.'</h2>'
+    );
+
+    $form['sp_tw_'.$i] = array(
+    '#type' => 'hidden',
+    '#title' => t('Button ID'),
+    '#description' => t('Share Progress Twitter '.$imore),
+    '#size' => 60,
+    '#maxlength' => 100,
+    '#required' => FALSE,
+    '#default_value' =>${'sp_tw_'.$i},
+    );
+
+    $form['status'.$i] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Click to Edit'),
+    );
+
+    $form['sp_twitter_message_static_'.$i] = array(
+    '#type' => 'textfield',
+    '#attributes' => array('disabled' => 'disabled'),
+    '#prefix' => '<div class="sp_info_break2" class="sp_data">',
+    '#suffix' => '</div>',
+    '#title' => t('Twitter Message '.$imore),
+    '#description' => t('make sure to add {LINK} where you want the link to appear in your tweet'),
+    '#size' => 110,
+    '#maxlength' => 110,
+    '#maxlength_js' => TRUE,
+    '#required' => FALSE,
+    '#default_value' =>${'sp_twitter_message_'.$i},
+    '#states' => array(
+    'visible' => array(
+    ':input[name="status'.$i.'"]' => array('checked' => FALSE), ),),
+    );
+
+
+    $form['sp_twitter_message_'.$i] = array(
+    '#type' => 'textfield',
+    '#prefix' => '<div class="sp_info_break2" class="sp_data">',
+    '#suffix' => '</div>',
+    '#title' => t('Twitter Message '.$imore),
+    '#description' => t('make sure to add {LINK} where you want the link to appear in your tweet'),
+    '#size' => 110,
+    '#maxlength' => 110,
+    '#maxlength_js' => TRUE,
+    '#required' => FALSE,
+    '#default_value' =>${'sp_twitter_message_'.$i},
+    '#states' => array(
+    'visible' => array(
+    ':input[name="status'.$i.'"]' => array('checked' => TRUE),
+    ),
+    ),
+    );
+
+    $form['editv'.$i] = array(
+    '#type' => 'button', 
+    '#value' => t('Update Variant '.$imore),
+    '#name' => 'update_'.$i,
+    '#executes_submit_callback' => TRUE,
+    '#submit' => array('bb_shareprogress_tw_form_process')
+    );
+
+
+    $form['deletev'.$i] = array(
+    '#type' => 'button', 
+    '#value' => t('Delete Variant '.$imore),
+    '#name' => 'delete_'.$i,
+    '#attributes' => array('onclick' => 'if(!confirm("Are you sure you want to delete?")){return false;}'),
+    '#executes_submit_callback' => TRUE,
+    '#submit' => array('bb_shareprogress_tw_form_process'));
+    $i++;
+    $imore++;
+  }
+
+  if ($sp_addnow != NULL) {
+    watchdog('sp_tw', 'Add version '.$i);
+    $form['markingup'.$i] = array(
+    '#prefix' => '<div class="sp_info_break">',
+    '#suffix' => '</div>',
+    '#markup' => '<h2>TWITTER VERSION '.$imore.'</h2>'
+    );
+
+    // Here is the added blank variant
+
+    $form['sp_tw_'.$i] = array(
+    '#type' => 'hidden',
+    '#prefix' => '<div class="sp_info_break2">',
+    '#suffix' => '</div>',
+    '#title' => t('Button ID'),
+    '#description' => t('Share Progress Twitter '.$imore),
+    '#size' => 60,
+    '#maxlength' => 100,
+    '#required' => FALSE,
+    '#default_value' =>(isset(${'sp_tw_'.$i}) ? ${'sp_tw_'.$i} : NULL),
+    );
+
+    $form['sp_twitter_message_'.$i] = array(
+    '#type' => 'textfield',
+    '#prefix' => '<div class="sp_info_break2">',
+    '#suffix' => '</div>',
+    '#title' => t('Twitter Message '.$imore),
+    '#description' => t('make sure to add {LINK} where you want the link to appear in your tweet'),
+    '#size' => 110,
+    '#maxlength' => 110,
+    '#maxlength_js' => TRUE,
+    '#required' => FALSE,
+    '#default_value' =>(isset(${'sp_twitter_message_'.$i}) ? ${'sp_twitter_message_'.$i} : NULL),
+    );
+
+    $form['deletev'.$i] = array(
+    '#type' => 'button', 
+    '#value' => t('Save Variant '.$imore),
+    '#name' => 'save_'.$i,
+    '#executes_submit_callback' => TRUE,
+    '#submit' => array('bb_shareprogress_tw_form_process')
+    );
+
+  }
+   
+
+  $form['some_text3'] = array(
+    '#markup' => "<p></p>"
+  );
+
+  watchdog('sp_fb' , 'start fb form code');
+
+  $fb_sp_max = 0;
+  $fb_sp_addnow = NULL;
+
+  if (isset($form_state['values']['fb_sp_addone'])) {
+    $fb_sp_max = $form_state['values']['fb_sp_addone'];
+    $fb_sp_addnow = 1;
+  }
+
+
+  $button_url = (!empty($_SERVER['HTTPS'])) ? "https://".$_SERVER['SERVER_NAME'].$_SERVER['REQUEST_URI'] : "http://".$_SERVER['SERVER_NAME'].$_SERVER['REQUEST_URI'];
+  $sp_this2 = menu_get_object();
+  $sp_fb_0 = NULL;	$sp_fb_b = NULL;	$sp_fb_c = NULL;	$sp_fb_d = NULL;
+  $sp_facebook_title_0 = NULL;	$sp_facebook_title_b = NULL;	$sp_facebook_title_c = NULL;	$sp_facebook_title_d = NULL;
+  $sp_facebook_description_0 = NULL;	$sp_facebook_description_b = NULL;	$sp_facebook_description_c = NULL;	$sp_facebook_description_d = NULL;
+  $image_a = NULL; $image_b = NULL; $image_c = NULL; $image_d = NULL;
+  $sp_facebook_thumb_0 = NULL; $sp_facebook_thumb_b = NULL; $sp_facebook_thumb_c = NULL; $sp_facebook_thumb_d = NULL;
+  $image_choice = array();
+
+  // build array of available images
+  global $base_url;
+  $image_temp2 = $base_url.'/files/';
+
+  if ( isset($sp_this2->field_image['und'][0]['uri'])) {
+    $image_temp = $sp_this2->field_image['und'][0]['uri'];
+    $image_temp3 = explode("public://" , $image_temp);
+    $image_a =  image_style_url('large', $image_temp);
+    $add_it = array($image_a => 'hero image') ;
+    $image_choice = array_merge($image_choice , $add_it);
+  }
+  else 
+    $image_a = NULL;
+
+  if ( isset($sp_this2->field_promo_image['und'][0]['uri'])) {
+    $image_temp = $sp_this2->field_promo_image['und'][0]['uri'];
+    $image_temp3 = explode("public://" , $image_temp);
+    $image_b =   image_style_url('large', $image_temp);
+    $add_it = array($image_b => 'promo image');
+    $image_choice = array_merge($image_choice , $add_it);
+  }
+  else 
+    $image_b = NULL;
+
+
+
+  if ( isset($sp_this2->field_square_promo_image['und'][0]['uri'])) {
+    $image_temp = $sp_this2->field_square_promo_image['und'][0]['uri'];
+    $image_temp3 = explode("public://" , $image_temp);
+    $image_c = $image_temp2.$image_temp3[1];
+    $add_it = array($image_c => 'square promo');
+    $image_choice = array_merge($image_choice , $add_it);
+  }
+  else 
+    $image_c = NULL;
+
+  $iball = 0;
+  
+  while (isset($sp_this2->field_image_list['und'][$iball]['uri'])) {
+    if ( isset($sp_this2->field_image_list['und'][$iball]['uri'])) {
+      $image_temp = $image_temp = $sp_this2->field_image_list['und'][$iball]['uri'];
+      $image_temp3 = explode("public://" , $image_temp);
+      ${'image_'.$iball} = $image_temp2.$image_temp3[1];
+      $add_it = array(${'image_'.$iball} => 'uploaded image '.$iball);
+      $image_choice = array_merge($image_choice , $add_it);
+    }
+
+  $iball++;
+  }
+
+  // check for existing button
+  if ( isset($sp_this2->field_sp_id['und'][0]['value'])) {
+    // if there is a share progress button pull in the share progress button data
+  	$fb_sp_id = $sp_this2->field_sp_id['und'][0]['value'];
+  	$mycall = drupal_http_request('https://run.shareprogress.org/api/v1/buttons/read?id='.$fb_sp_id.'&key=3YKfg0H0Xwl93MkEinVU6g');
+  	$data = json_decode($mycall->data);		
+    // decode JSON from shareprogress API call
+  	$sp_page_title = $data->response[0]->page_title;
+  	$sp_button_url = $data->response[0]->page_url;
+    $i=0;
+
+    while (isset($data->response[0]->variants->facebook[$i]->id))	{
+    	${'sp_fb_'.$i} = $data->response[0]->variants->facebook[$i]->id;
+    	${'sp_facebook_title_'.$i} = $data->response[0]->variants->facebook[$i]->facebook_title;
+    	${'sp_facebook_description_'.$i} = $data->response[0]->variants->facebook[$i]->facebook_description;	
+    	${'sp_facebook_thumb_'.$i} =$data->response[0]->variants->facebook[$i]->facebook_thumbnail;	
+    	$i++;
+    }
+  	
+  	$node = node_load($sp_this2->nid);
+  	$node->nid = $sp_this2->nid;
+    $node->status = 1;												
+    $node->language = LANGUAGE_NONE;
+    node_save($node);
+    $sp_status = 'updated';
+  }
+
+
+  // if there is no share progress button create one from the node fields
+  else {
+    if ((isset($sp_this2->field_full_details)) ? $sp_this2->field_full_details : NULL)
+      $sp_trimmed = substr($sp_this2->field_full_details['und'][0]['value'], 0, 250);
+    else
+      $sp_trimmed = '';
+    
+    $sp_page_title = (isset($sp_this2->title)) ? substr($sp_this2->title, 0, 100) : NULL;
+    $sp_button_url = substr($button_url, 0, -17);
+    $sp_facebook_title_0 = (isset($sp_this2->title)) ? $sp_this2->title : NULL;
+    $sp_facebook_description_0 = $sp_trimmed;
+    $sp_fb_0 = NULL;
+    $sp_fb_b = NULL;
+    $sp_facebook_title_b = NULL;
+    $sp_facebook_description_b = NULL;
+    $fb_sp_id = NULL;
+    $sp_status = 'created';
+  }
+
+  $form['fbook_markingup'] = array(
+  '#prefix' => '<div class="sp_info">',
+  '#suffix' => '</div>',
+  '#markup' => "<h2>SHAREPROGRESS FACEBOOK BUTTON </h2>"
+  );
+
+
+  $form['sp_nid'] = array(
+  '#type' => 'textfield', 
+  '#value' => (isset($sp_this2->nid)) ? $sp_this2->nid : NULL
+  );
+
+  $form['fb_sp_addone'] = array(
+  '#type' => 'hidden', 
+  '#value' => $fb_sp_max,
+  );
+
+  $form['sp_status_fb'] = array(
+  '#type' => 'hidden',
+  '#title' => t('Create or Update'),
+  '#description' => t(''),
+  '#size' => 60,
+  '#maxlength' => 120,
+  '#required' => FALSE,
+  '#default_value' =>$sp_status,
+  );
+
+  $form['sp_name'] = array(
+  '#type' => 'hidden',
+  '#title' => t('Button Title'),
+  '#description' => t('Name of this button'),
+  '#size' => 60,
+  '#maxlength' => 100,
+  '#required' => TRUE,
+  '#default_value' =>$sp_page_title,
+  );
+
+  $form['sp_url'] = array(
+  '#type' => 'hidden',
+  '#title' => t('Button URL'),
+  '#description' => t('URL of page to be shared by this button'),
+  '#size' => 60,
+  '#maxlength' => 255,
+  '#required' => TRUE,
+  '#default_value' =>$sp_button_url,
+  );
+
+  $form['fb_sp_id'] = array(
+  '#type' => 'hidden',
+  '#title' => t('Button ID'),
+  '#description' => t('Facebook Share Progess buttonID'),
+  '#size' => 60,
+  '#maxlength' => 120,
+  '#required' => FALSE,
+  '#default_value' =>$fb_sp_id,
+  );
+
+  $form['in_markingup'.$i] = array(
+  '#markup' => "<p></p><img src='http://www.blackskymedia.com/white2.png'><h2> </h2>"
+  );
+
+  $form['addfbbutv0'.$i] = array(
+  '#type' => 'button', 
+  '#name' =>'fb_button_', 
+  '#value' => t('ADD FACEBOOK VARIANT'),
+  '#executes_submit_callback' => TRUE,
+  '#submit' => array('bb_shareprogress_form_process')); 
+
+
+
+  if ($sp_status == 'updated') {
+    // Submit button
+    $form['fb1_submit'] = array(
+    '#type' => 'button', 
+    '#name' =>'fb_make_button_', 
+    '#value' => t('UPDATE FACEBOOK BUTTON'),
+    '#executes_submit_callback' => TRUE,
+    '#submit' => array('bb_shareprogress_form_process'),
+    ); 
+  }
+
+
+
+
+
+  if ($sp_status == 'created'){
+    // Submit button
+    $form['face_submit'] = array(
+    '#type' => 'button',
+    '#value' => t('CREATE FACEBOOK BUTTON'),
+    '#executes_submit_callback' => TRUE,
+    '#submit' => array('bb_shareprogress_form_process')
+    );
+  }
+
+
+
+  $form['some_text3'] = array(
+  '#markup' => "<p></p>"
+  );
+
+
+  $form['sp_image2'] = array(
+  '#type' => 'managed_file',
+  '#name' => 'image',
+  '#title' => t('UPLOAD IMAGE'),
+  '#size' => 40,
+  '#upload_validators' => array(
+  'file_validate_extensions' => array('gif png jpg jpeg'),
+  ),
+
+  '#upload_location' => 'public://sp_images/',
+  '#required' => FALSE,
+  '#ajax' => array(
+  'callback' => 'bb_shareprogress_thumb',
+  'wrapper' => 'ajax_markup_div',
+  'method' =>'replace',
+  'effect' => 'fade',
+  ),   
+  );
+
+  $form['ajax_markup'] = array(
+  '#prefix' => '<div id="ajax_markup_div">',
+  '#suffix' => '</div>',
+  '#markup' => t('Hello WOrld'),
+  );
+
+
+  if (!empty($form_state['values']['sp_image2'])) {
+    $form['ajax_markup']['#markup'] = t("Hello it is to you my good friend");
+  }
+
+  $form['sp_image13'] = array(
+  '#type' => 'textfield',
+  '#title' => t('Image Upload Test'),
+  '#size' => 60,
+  '#maxlength' => 120,
+  '#required' => FALSE,
+  '#default_value' =>$uploaded_pic, 
+  );
+
+  watchdog('sp_info33' , $uploaded_pic); 
+
+  $i=0; $imod =1;
+
+  while (isset(${'sp_fb_'.$i}) && ${'sp_fb_'.$i} !== NULL ) {
+    watchdog('sp_fb' , 'Form facebook version '.$i);
+    $form['fb_text_'.$i] = array(
+    '#prefix' => '<div class="sp_info_break">',
+    '#suffix' => '</div>',
+    '#markup' => '<p></p><h2>FACEBOOK VARIANT '.$imod.'</h2><p></p><p></p>'
+    );
+
+    $form['face_span1'.$i] = array(
+    '#markup' => "<span>"
+    );
+
+
+    if ($image_a != NULL){
+      $form['face_text2'.$i] = array(
+      '#markup' => "<span><img src='".$image_a."' width='200' height='200'>"
+      );
+
+      $form['fb_text01'.$i] = array(
+      '#markup' => "<div class='sp_share'><p class='sp_share'>hero image</p></div></span>"
+      );
+    }
+
+    if ($image_b != NULL){
+      $form['face_text2zaa'.$i] = array(
+      '#markup' => "<span><img src='".$image_b."' width='200' height='200'>"
+      );
+
+      $form['fb_text02'.$i] = array(
+      '#markup' => "<div class='sp_share'><p class='sp_share'>promo image</p></div></span>"
+      );
+    }
+
+    if ($image_c != NULL){
+      $form['face_text2za'.$i] = array(
+      '#markup' => "<span><img src='".$image_c."' width='200' height='200'>"
+      );
+
+      $form['fb_text03'.$i] = array(
+      '#markup' => "<div class='sp_share'><p class='sp_share'>square promo</p></div></span>"
+      );
+    }
+
+    $iball = 0;
+    while (isset(${'image_'.$iball})) {
+      $form[$i.'fb_loaded'.$iball] = array(
+      '#markup' => "<span><img src='".${'image_'.$iball}."' width='200' height='200'>"
+      );
+
+      $form[$i.'fb_load_text'.$iball] = array(
+      '#markup' => "<div class='sp_share'><p class='sp_share'>uploaded image $iball</p></div></span>"
+      );
+      $iball++;
+    }
+
+
+    // close the span for image list
+    $form['face_span2'.$i] = array(
+    '#markup' => "</span></br>"
+    );
+
+    $form['sp_fb_'.$i] = array(
+    '#type' => 'hidden',
+    '#title' => t('Button ID'),
+    '#description' => t(''),
+    '#size' => 60,
+    '#required' => FALSE,
+    '#default_value' =>${'sp_fb_'.$i},
+    );
+
+
+    $form['sp_facebook_thumb_'.$i] = array(
+    "#type" => "select",
+    "#title" => t("FACEBOOK IMAGE"),
+    "#options" => $image_choice,
+    "#value" => ${'sp_facebook_thumb_'.$i},
+    );
+
+    $form['fb_status'.$i] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Click to Edit'),
+    );
+
+
+    $form['sp_facebook_titlex_'.$i] = array(
+    '#prefix' => '<div class="sp_info_break2">',
+    '#suffix' => '</div>',
+    '#type' => 'textfield',
+    '#title' => t('FACEBOOK TITLE'),
+    '#description' => t(''),
+    '#size' => 100,
+    '#maxlength' => 100,
+    '#maxlength_js' => TRUE,
+    '#required' => FALSE,
+    '#attributes' => array('disabled' => 'disabled'),
+    '#default_value' =>${'sp_facebook_title_'.$i},
+    '#states' => array(
+    'visible' => array(
+    ':input[name="fb_status'.$i.'"]' => array('checked' => FALSE), ),),
+    );
+
+   
+    $form['sp_facebook_title_'.$i] = array(
+    '#prefix' => '<div class="sp_info_break2">',
+    '#suffix' => '</div>',
+    '#type' => 'textfield',
+    '#title' => t('FACEBOOK TITLE'),
+    '#description' => t(''),
+    '#size' => 100,
+    '#maxlength' => 100,
+    '#maxlength_js' => TRUE,
+    '#required' => FALSE,
+    '#default_value' =>${'sp_facebook_title_'.$i},
+    '#states' => array(
+    'visible' => array(
+    ':input[name="fb_status'.$i.'"]' => array('checked' => TRUE), ),),
+    );
+
+    $form['sp_facebook_descriptionx_'.$i] = array(
+    '#attributes' => array('disabled' => 'disabled'),
+    '#prefix' => '<div class="sp_info_break2">',
+    '#suffix' => '</div>',
+    '#type' => 'textarea',
+    '#title' => t('FACEBOOK DESCRIPTION'),
+    '#description' => t(''),
+    '#size' => 40,
+    '#rows' =>3,
+    '#cols' =>40,
+    '#maxlength' => 260,
+    '#maxlength_js' => TRUE,
+    '#required' => FALSE,
+    '#default_value' =>${'sp_facebook_description_'.$i},
+    '#states' => array(
+    'visible' => array(
+    ':input[name="fb_status'.$i.'"]' => array('checked' => FALSE), ),),
+    );
+
+
+    $form['sp_facebook_description_'.$i] = array(
+    '#prefix' => '<div class="sp_info_break2">',
+    '#suffix' => '</div>',
+    '#type' => 'textarea',
+    '#title' => t('FACEBOOK DESCRIPTION'),
+    '#description' => t(''),
+    '#size' => 40,
+    '#rows' =>3,
+    '#maxlength' => 260,
+    '#maxlength_js' => TRUE,
+    '#required' => FALSE,
+    '#default_value' =>${'sp_facebook_description_'.$i},
+    '#states' => array(
+    'visible' => array(
+    ':input[name="fb_status'.$i.'"]' => array('checked' => TRUE), ),),
+    );
+
+
+    $form['fb_editv'.$i] = array(
+
+    '#type' => 'button', 
+    '#value' => t('Update Variant '.$imod),
+    '#name' => 'fb_update_'.$i,
+
+    '#executes_submit_callback' => TRUE,
+    '#submit' => array('bb_shareprogress_form_process')
+    );
+
+
+
+    $form['fb_deletev'.$i] = array(
+    '#type' => 'button', 
+    '#name' => 'fb_delete_'.$i, 
+    '#value' => t('Delete Variant '.$imod),
+    '#attributes' => array('onclick' => 'if(!confirm("Are you sure you want to delete?")){return false;}'),
+    '#executes_submit_callback' => TRUE,
+    '#submit' => array('bb_shareprogress_form_process')); 
+
+
+
+
+    $form['fb_spacev'.$i] = array(
+    '#markup' => "</br>"
+    );
+
+    $imod++;
+    $i++;
+  }
+
+
+
+  if ($fb_sp_addnow != NULL) {
+    watchdog('sp_fb', 'Add version '.$i);
+    watchdog('sp_fb' , 'Form facebook version '.$i);
+    $form['fb_text_'.$i] = array(
+    '#prefix' => '<div class="sp_info_break">',
+    '#suffix' => '</div>',
+    '#markup' => '<p></p><h2>FACEBOOK VARIANT '.$imod.'</h2><p></p><p></p>'
+    );
+
+    $form['face_span1'.$i] = array(
+    '#markup' => "<span>"
+    );
+
+
+    if ($image_a != NULL){
+      $form['face_text2'.$i] = array(
+      '#markup' => "<span><img src='".$image_a."' width='200' height='200'>"
+      );
+
+      $form['fb_text01'.$i] = array(
+      '#markup' => "<div class='sp_share'><p class='sp_share'>hero image</p></div></span>"
+      );
+    }
+
+    if ($image_b != NULL){
+      $form['face_text2zaa'.$i] = array(
+      '#markup' => "<span><img src='".$image_b."' width='200' height='200'>"
+      );
+
+      $form['fb_text02'.$i] = array(
+      '#markup' => "<div class='sp_share'><p class='sp_share'>promo image</p></div></span>"
+      );
+    }
+
+    if ($image_c != NULL){
+      $form['face_text2za'.$i] = array(
+      '#markup' => "<span><img src='".$image_c."' width='200' height='200'>"
+      );
+
+      $form['fb_text03'.$i] = array(
+      '#markup' => "<div class='sp_share'><p class='sp_share'>square promo</p></div></span>"
+      );
+    }
+
+    $iball = 0;
+    while (isset(${'image_'.$iball})) {
+      $form[$i.'fb_loaded'.$iball] = array(
+      '#markup' => "<span><img src='".${'image_'.$iball}."' width='200' height='200'>"
+      );
+
+      $form[$i.'fb_load_text'.$iball] = array(
+      '#markup' => "<div class='sp_share'><p class='sp_share'>uploaded image $iball</p></div></span>"
+      );
+      //watchdog('sp_fb_info' , 'facebook version '.${'image'.$iball} );
+      $iball++;
+    }
+
+
+    // close the span for image list
+    $form['face_span2'.$i] = array(
+    '#markup' => "</span></br>"
+    );
+
+    $form['sp_fb_'.$i] = array(
+    '#type' => 'hidden',
+    '#title' => t('Button ID'),
+    '#description' => t(''),
+    '#size' => 60,
+    '#required' => FALSE,
+    );
+
+
+    $form['sp_facebook_thumb_'.$i] = array(
+    "#type" => "select",
+    "#title" => t("FACEBOOK IMAGE"),
+    "#options" => $image_choice,
+    );
+
+
+    $form['sp_facebook_title_'.$i] = array(
+    '#prefix' => '<div class="sp_info_break2">',
+    '#suffix' => '</div>',
+    '#type' => 'textfield',
+    '#title' => t('FACEBOOK TITLE'),
+    '#description' => t(''),
+    '#size' => 100,
+    '#maxlength' => 100,
+    '#maxlength_js' => TRUE,
+    '#required' => FALSE,
+    );
+
+
+    $form['sp_facebook_description_'.$i] = array(
+    '#prefix' => '<div class="sp_info_break2">',
+    '#suffix' => '</div>',
+    '#type' => 'textarea',
+    '#title' => t('FACEBOOK DESCRIPTION'),
+    '#description' => t(''),
+    '#size' => 40,
+    '#maxlength' => 260,
+    '#maxlength_js' => TRUE,
+    '#required' => FALSE,
+    );
+
+
+    $form['fb_updatev'.$i] = array(
+    '#type' => 'button', 
+    '#name' => 'fb_update_'.$i, 
+    '#value' => t('Save Variant '.$imod),
+    '#executes_submit_callback' => TRUE,
+    '#submit' => array('bb_shareprogress_form_process')); 
+
+
+    $form['fb_spacev'.$i] = array(
+    '#markup' => "</br>"
+    );
+  }
+
+  $form['face_text3'] = array(
+  '#markup' => '<p></p><p></p><p></p><p></p>'
+  );
+  //return $form;
+
+
+return $form;
+}
+
+
+
+
+/**
+* Share Progress; Update FACEBOOK Form Function
+*/
+function bb_shareprogress_form_process($form, &$form_state){
+
+  $done_did = NULL;
+  watchdog('sp_fb99' , 'call to bb_shareprogress_form_process');
+  $sp_action_response = 'update';
+  $sp_action = 'update';
+  $url = 'https://run.shareprogress.org/api/v1/buttons/'.$sp_action;
+
+
+  // UPLOAD IMAGE
+  if (isset($form_state['values']['sp_image'])) {
+
+      $image = file_load($form_state['values']['sp_image']);
+
+      $loadedimage = image_load($image->uri);
+      image_save($loadedimage);
+      $loadedimage->status = FILE_STATUS_PERMANENT;
+      watchdog('sp_fb' , 'image saved FB');
+  	drupal_set_message(t('The form has been submitted and the image has been saved, filename: @filename.', array('@filename' => $file->filename))); 
+  	return;
+  }
+ 
+
+  // CREATE ARRAY FOR BUTTON AND ALL VARIANTS
+  $sp_button =array( 
+  'id' => $form_state['values']['fb_sp_id'],
+  'key'=>'3YKfg0H0Xwl93MkEinVU6g' , 
+  'page_url'=>$form_state['values']['sp_url'], 
+  'page_title'=>$form_state['values']['sp_name'], 
+  'button_template'=>'sp_fb_small', 
+  'is_active' => 'true',
+  'auto_fill' => 'true',
+  );
+  watchdog('sp_fb' , 'creating array for varriants');
+  // Loop through all four variants 
+  $i=0;
+  while (isset($form_state['values']['sp_facebook_title_'.$i ]) && $form_state['values']['sp_facebook_title_'.$i ] != '') {
+    if (isset($form_state['input']['fb_delete_'.$i]))
+    if (isset($form_state['values']['sp_fb_1']) && $form_state['values']['sp_fb_1'] != '') {
+      $sp_button['variants']['facebook'][$i]['_destroy'] = 'true';
+      drupal_set_message(t('Facebook Variant '.($i+1).' has been deleted'));
+      $done_did = 5;
+      watchdog('sp_fb' , 'deleted FACEBOOK variant ');
+    }
+
+    else {
+      drupal_set_message($message= t('The Shareprogress Facebook Button Variant '.($i+1).' can not be deleted, it is the last version'), $type = 'error');
+      $done_did = 3;
+    }
+
+
+
+    $sp_button['variants']['facebook'][$i]['facebook_title'] = $form_state['values']['sp_facebook_title_'.$i ];
+    $sp_button['variants']['facebook'][$i]['facebook_description'] = $form_state['values']['sp_facebook_description_'.$i ];
+    $sp_button['variants']['facebook'][$i]['id'] = $form_state['values']['sp_fb_'.$i ];
+
+    if ( isset($form_state['input']['sp_facebook_thumb_'.$i])) {
+      watchdog('sp_fb' , 'thumb fb here');
+      $sp_button['variants']['facebook'][$i]['facebook_thumbnail'] = $form_state['input']['sp_facebook_thumb_'.$i];
+    }
+
+    $i++;
+
+  }
+
+
+  $content = json_encode($sp_button);
+  $curl = curl_init($url);
+  curl_setopt($curl, CURLOPT_HEADER, false);
+  curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($curl, CURLOPT_HTTPHEADER,
+  array("Content-type: application/json"));
+  curl_setopt($curl, CURLOPT_POST, true);
+  curl_setopt($curl, CURLOPT_POSTFIELDS, $content);
+
+  $json_response = curl_exec($curl);
+  $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+
+  $sp_response = json_decode($json_response);
+  $sp_fb_0 = $sp_response->response[0]->variants->facebook[0]->id;
+  $sp_fb_b = NULL;
+  $fb_sp_id = $sp_response->response[0]->id;
+  curl_close($curl);
+
+
+  $mycall2 = drupal_http_request('https://run.shareprogress.org/api/v1/buttons/read?id='.$fb_sp_id.'&key=3YKfg0H0Xwl93MkEinVU6g');
+  $data2 = json_decode($mycall2->data);	$node = node_load($form_state['values']['sp_nid']);
+  $node->nid = $form_state['values']['sp_nid'];
+  $node->status = 1;										
+  // make the node published
+  $node->field_sp_id[$node->language][0]['value'] = $fb_sp_id;
+  $node->language = LANGUAGE_NONE;
+  node_save($node);
+  watchdog('sp_fb' , 'button saved FB');
+	
+	
+	
+	watchdog('sp_fb' , 'trying to add variant FB');
+	if (isset($form_state['input']['fb_button_'])) {
+		$form_state['values']['fb_sp_addone']++;
+		$form_state['rebuild'] = TRUE;
+		drupal_set_message(t('Variant Added to the Facebook Shareprogress button'));
+		$done_did = 4;
+		watchdog('sp_fb' , 'facebook variant request to be added');
+  }
+
+	if ($done_did < 1)
+	drupal_set_message(t('The Facebook Shareprogress button '.$form_state['values']['sp_name'].' has been '.$form_state['values']['sp_status_fb']));
+}
+
+
+
+
+
+
+
+/**
+* Update TWITTER Form Function;
+*/
+
+function bb_shareprogress_tw_form_process($form, &$form_state){
+
+  watchdog('sp_tw', 'call to bb_shareprogress_tw_form_process');
+  // check if this is an IMAGE UPLOAD
+  if (isset($form_state['values']['sp_image2']) && $form_state['values']['sp_image2'] != NULL) {
+      $sp_this2 = menu_get_object();
+      $i = 0;
+      while (isset($sp_this2->field_image_list['und'][$i]['uri'])) {
+        $i++;
+      }
+      watchdog('sp_tw' , 'call to submit function image '.$i);
+
+      $file = file_load($form_state['values']['sp_image2']);
+      $file->status = FILE_STATUS_PERMANENT;
+      file_save($file);
+      $node = node_load($sp_this2->nid);
+      $node->nid = $sp_this2->nid;
+      $node->status = 1;												// make the node published
+      $node->field_image_list[$node->language][$i]['fid'] =  $file->fid;
+      $node->field_image_list[$node->language][$i]['uid'] =  $file->uid;
+      $node->field_image_list[$node->language][$i]['uri'] =  $file->uri;
+      $node->field_image_list[$node->language][$i]['filemime'] =  $file->filemime;
+      $node->field_image_list[$node->language][$i]['filesize'] =  $file->filesize;
+      $node->field_image_list[$node->language][$i]['status'] =  1;
+      $node->field_image_list[$node->language][$i]['timestamp'] =  $file->timestamp;
+      $node->language = LANGUAGE_NONE;
+      node_save($node);
+
+      watchdog('sp_tw', 'return from image call to bb_shareprogress_tw_form_process');
+      return;
+    } 
+
+
+  $done_did = 0;
+  $sp_action_response = 'update';
+  $sp_action = 'update';
+  $url = 'https://run.shareprogress.org/api/v1/buttons/'.$sp_action;
+
+  // CREATE ARRAY FOR BUTTON AND ALL VARIANTS
+  $sp_button =array( 
+  'id' => $form_state['values']['sp_id'],
+  'key'=>'3YKfg0H0Xwl93MkEinVU6g' , 
+  'page_url'=>$form_state['values']['sp_url'], 
+  'page_title'=>$form_state['values']['sp_name'], 
+  'button_template'=>'sp_tw_small', 
+  'is_active' => 'true',
+  'auto_fill' => 'true',
+  );
+
+  watchdog('sp_tw', 'creating twitter variants in form');
+  // loop through all four variants
+  $i=0;
+  while (isset($form_state['values']['sp_twitter_message_'.$i ]) && $form_state['values']['sp_twitter_message_'.$i ] != '') {
+
+  if (isset($form_state['input']['delete_'.$i]))
+    if (isset($form_state['values']['sp_tw_1']) && $form_state['values']['sp_tw_1'] != '') {
+      $sp_button['variants']['twitter'][$i]['_destroy'] = 'true';
+      drupal_set_message(t('Twitter Variant '.($i+1).' has been deleted'));
+      $done_did = 5;
+      watchdog('sp_tw' , 'deleted TWITTER variant ');
+    }
+
+    else {
+      drupal_set_message($message= t('The Shareprogress Twitter Button Variant '.($i+1).' can not be deleted, it is the last version'), $type = 'error');
+      $done_did = 3;
+    }
+  
+    $sp_button['variants']['twitter'][$i]['twitter_message'] = $form_state['values']['sp_twitter_message_'.$i ];
+    $sp_button['variants']['twitter'][$i]['id'] = $form_state['values']['sp_tw_'.$i ];
+    $i++;
+  }
+
+  $content = json_encode($sp_button);
+  $curl = curl_init($url);
+  curl_setopt($curl, CURLOPT_HEADER, false);
+  curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($curl, CURLOPT_HTTPHEADER,
+  array("Content-type: application/json"));
+  curl_setopt($curl, CURLOPT_POST, true);
+  curl_setopt($curl, CURLOPT_POSTFIELDS, $content);
+
+  $json_response = curl_exec($curl);
+  $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+  $sp_response = json_decode($json_response);
+  $test = $sp_response->success[0];
+  $sp_id = $sp_response->response[0]->id;
+  curl_close($curl);
+
+  $mycall2 = drupal_http_request('https://run.shareprogress.org/api/v1/buttons/read?id='.$sp_id.'&key=3YKfg0H0Xwl93MkEinVU6g');
+  $data2 = json_decode($mycall2->data);
+  $node = node_load($form_state['values']['sp_nid']);
+  $node->nid = $form_state['values']['sp_nid'];
+  $node->status = 1;												
+  // make the node published
+  $node->field_sp_twitter_id[$node->language][0]['value'] = $sp_id;
+  $node->language = LANGUAGE_NONE;
+  node_save($node);
+  watchdog('sp_tw' , 'twitter button saved');
+
+  if (isset($form_state['input']['button_sp'])) {
+    $form_state['values']['sp_addone']++;
+    $form_state['rebuild'] = TRUE;
+    drupal_set_message(t('Twitter Variant Added to the Shareprogress button'));
+    $done_did = 4;
+    watchdog('sp_tw' , 'twitter variant request to be added');
+  }
+
+  if ($done_did < 1)
+  drupal_set_message(t('The Shareprogress Twitter button '.$form_state['values']['sp_name'].' has been '.$form_state['values']['sp_status']));
+}
+
+
+
+
+function bb_shareprogress_form_button($form, &$form_state){
+  $sp_action = 'delete';
+  $url = 'https://run.shareprogress.org/api/v1/buttons/'.$sp_action;
+  $sp_button =array( 
+  'id' => $form_state['values']['sp_id'],
+	'key'=>'3YKfg0H0Xwl93MkEinVU6g' , 
+	'page_url'=>$form_state['values']['sp_url'], 
+	'page_title'=>$form_state['values']['sp_name'], 
+	'button_template'=>'sp_fb_large', 
+	'is_active' => 'true',
+	'auto_fill' => 'true',
+		);
+  // get button info from shareprogress api
+  $content = json_encode($sp_button);
+  $curl = curl_init($url);
+  curl_setopt($curl, CURLOPT_HEADER, false);
+  curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($curl, CURLOPT_HTTPHEADER,
+  array("Content-type: application/json"));
+  curl_setopt($curl, CURLOPT_POST, true);
+  curl_setopt($curl, CURLOPT_POSTFIELDS, $content);
+
+  $json_response = curl_exec($curl);
+  $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+  curl_close($curl);
+
+  // clear button info from the drupal node
+  $node = node_load($form_state['values']['sp_nid']);
+  $node->nid = $form_state['values']['sp_nid'];
+  $node->status = 1;													
+  $node->field_sp_id =  NULL;
+  $node->field_shareprogress =  NULL;	 
+  $node->language = LANGUAGE_NONE;
+  node_save($node);
+  	
+// send message to confirm the button has been deleted
+drupal_set_message(t('The ShareProgress Facebook Button '.$form_state['values']['sp_name'].' has been deleted'));
+}
+
+
+
+
+
+/**
+* Share Progress; make API call for Shareprogress.
+*/
+
+function bb_shareprogress_json($sp_button, $url) {
+  $content = json_encode($sp_button);
+  $curl = curl_init($url);
+  curl_setopt($curl, CURLOPT_HEADER, false);
+  curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($curl, CURLOPT_HTTPHEADER, array("Content-type: application/json"));
+  curl_setopt($curl, CURLOPT_POST, true);
+  curl_setopt($curl, CURLOPT_POSTFIELDS, $content);
+  $json_response = curl_exec($curl);
+  $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+  curl_close($curl);
+  watchdog('sp_info' , 'json function called');
+  return $json_response;  
+}
+

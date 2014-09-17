@@ -1,0 +1,9 @@
+;$Id$
+name = BB Share Progress
+description = Module for integrating Share Progress RESTful API into the Acme Website 
+package = AcmeInc
+core = 7.x
+files[] = bb_shareprogress.module
+stylesheets[all][] = bb_shareprogress.css
+;dependencies[] = autoload
+;php = 5.2
